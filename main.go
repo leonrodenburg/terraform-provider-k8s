@@ -42,6 +42,9 @@ func main() {
 				ResourcesMap: map[string]*schema.Resource{
 					"k8s_manifest": resourceManifest(),
 				},
+				DataSourcesMap: map[string]*schema.Resource{
+					"k8s_port_forward": dataSourcePortForward(),
+				},
 				ConfigureFunc: func(d *schema.ResourceData) (interface{}, error) {
 					return &config{
 						kubeconfig:        d.Get("kubeconfig").(string),
