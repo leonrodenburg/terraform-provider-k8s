@@ -22,6 +22,7 @@ type config struct {
 	kubeconfigContext string
 	kubectlPath       string
 	kubectlToken      string
+	kubectlValidate   bool
 }
 
 func main() {
@@ -49,6 +50,11 @@ func main() {
 						Type:     schema.TypeString,
 						Optional: true,
 					},
+					"kubectl_validate": &schema.Schema{
+						Type:     schema.TypeBool,
+						Optional: true,
+						Default:  true,
+					},
 				},
 				ResourcesMap: map[string]*schema.Resource{
 					"k8s_manifest": resourceManifest(),
@@ -60,6 +66,7 @@ func main() {
 						kubeconfigContext: d.Get("kubeconfig_context").(string),
 						kubectlPath:       d.Get("kubectl_path").(string),
 						kubectlToken:      d.Get("kubectl_token").(string),
+						kubectlValidate:   d.Get("kubectl_validate").(bool),
 					}, nil
 				},
 			}
@@ -139,6 +146,10 @@ func kubeconfigPath(m interface{}) (string, func(), error) {
 	return "", cleanupFunc, nil
 }
 
+func kubectlValidate(m interface{}) string {
+	return fmt.Sprintf("--validate=%t", m.(*config).kubectlValidate)
+}
+
 func kubectl(m interface{}, kubeconfig string, args ...string) *exec.Cmd {
 	if kubeconfig != "" {
 		args = append([]string{"--kubeconfig", kubeconfig}, args...)
@@ -176,9 +187,9 @@ func resourceManifestCreate(d *schema.ResourceData, m interface{}) error {
 
 	err = resource.Retry(d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
 		if isNamespace {
-			cmd = kubectl(m, kubeconfig, "apply", "-n", namespace.(string), "-f", "-")
+			cmd = kubectl(m, kubeconfig, "apply", kubectlValidate(m), "-n", namespace.(string), "-f", "-")
 		} else {
-			cmd = kubectl(m, kubeconfig, "apply", "-f", "-")
+			cmd = kubectl(m, kubeconfig, "apply", kubectlValidate(m), "-f", "-")
 		}
 		cmd.Stdin = strings.NewReader(d.Get("content").(string))
 		if err := run(cmd); err != nil {
@@ -238,7 +249,7 @@ func resourceManifestUpdate(d *schema.ResourceData, m interface{}) error {
 	defer cleanup()
 
 	return resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-		cmd := kubectl(m, kubeconfig, "apply", "-f", "-")
+		cmd := kubectl(m, kubeconfig, "apply", kubectlValidate(m), "-f", "-")
 		cmd.Stdin = strings.NewReader(d.Get("content").(string))
 		if err := run(cmd); err != nil {
 			return resource.RetryableError(err)
